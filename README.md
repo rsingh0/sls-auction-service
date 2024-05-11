@@ -1,0 +1,1 @@
+# sls-auction-service
