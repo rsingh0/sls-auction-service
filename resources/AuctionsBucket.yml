@@ -1,0 +1,15 @@
+AuctionsBucket:
+  Type: AWS::S3::Bucket
+  Properties:
+    BucketName: ${self:custom.AuctionsBucket.name}
+    PublicAccessBlockConfiguration:
+      BlockPublicAcls: false
+    OwnershipControls:
+      Rules:
+        - ObjectOwnership: ObjectWriter
+    # S3 Lifecycle rule to delete picture after 1 day
+    LifecycleConfiguration:
+      Rules:
+        - Id: ExpirePictures
+          Status: Enabled
+          ExpirationInDays: 1

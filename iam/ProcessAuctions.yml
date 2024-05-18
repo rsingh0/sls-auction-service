@@ -1,0 +1,21 @@
+ProcessAuctions:
+  # IAM Role to Allow SES sending message
+  - Effect: Allow
+    Action:
+      - sqs:SendMessage
+    Resource: ${self:custom.MailQueue.arn}
+  
+  # IAM Role to Allow Auctions Table actions
+  - Effect: Allow
+    Action:
+      - dynamodb:PutItem
+      - dynamodb:Scan
+      - dynamodb:GetItem
+      - dynamodb:UpdateItem
+      - dynamodb:Query
+    # Cloud Formation intrinsive function GetAtt to retrieve Auctions table ARN(arn:aws:dynamodb:us-east-2:339713012956:table/AuctionsTable)
+    Resource: 
+      - !GetAtt AuctionsTable.Arn
+      # ARN of Index also required
+      # arn:aws:dynamodb:us-east-2:339713012956:table/AuctionsTable-dev/index/StatusAndEndDate
+      - !Join ['/', [!GetAtt AuctionsTable.Arn, 'index', 'StatusAndEndDate']]

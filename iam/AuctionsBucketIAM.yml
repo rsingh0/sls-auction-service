@@ -1,0 +1,14 @@
+AuctionsBucketIAM:
+  # IAM Role to allow uploading product image
+  - Effect: Allow
+    Action:
+      - s3:PutObject
+    Resource: arn:aws:s3:::${self:custom.AuctionsBucket.name}/*
+  # IAM Role to allow updating product URL.
+  - Effect: Allow
+    Action:
+      - dynamodb:UpdateItem
+      - dynamodb:GetItem
+    # Cloud Formation intrinsive function GetAtt to retrieve Auctions table ARN(arn:aws:dynamodb:us-east-2:339713012956:table/AuctionsTable)
+    Resource: 
+      - !GetAtt AuctionsTable.Arn

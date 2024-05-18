@@ -1,0 +1,133 @@
+service: auction-service
+frameworkVersion: "3"
+
+plugins:
+  - serverless-bundle
+  # serverless plugin to associate IAM role per lamda function
+  - serverless-iam-roles-per-function
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  memorySize: 256
+  region: us-east-2
+  stage: ${opt:stage, 'dev'}
+  environment:
+      MAIL_QUEUE_URL: ${self:custom.MailQueue.url}
+      AUCTIONS_BUCKET_NAME: ${self:custom.AuctionsBucket.name}
+
+functions:
+  createAuction:
+    handler: src/handlers/createAuction.handler
+    events:
+      - http:
+          path: /auction
+          method: POST
+          cors: true
+          authorizer:
+            arn: ${self:custom.authorizer}
+            type: token
+            identitySource: method.request.header.Authorization
+    environment:
+      AUCTIONS_TABLE_NAME: !Ref AuctionsTable
+      # Reusing http connections by lamda function to reduce TLS handshake latency (keep-alive)
+      AWS_NODEJS_CONNECTION_REUSE_ENABLED: 1
+    iamRoleStatements: ${file(iam/AuctionsTableIAM.yml):AuctionTableIAM}
+  getAuctions:
+    handler: src/handlers/getAuctions.handler
+    events:
+      - http:
+          path: /auctions
+          method: GET
+          cors: true
+          authorizer:
+            arn: ${self:custom.authorizer}
+            type: token
+            identitySource: method.request.header.Authorization
+    environment:
+      AUCTIONS_TABLE_NAME: !Ref AuctionsTable
+      # Reusing http connections by lamda function to reduce TLS handshake latency (keep-alive)
+      AWS_NODEJS_CONNECTION_REUSE_ENABLED: 1
+    iamRoleStatements: ${file(iam/AuctionsTableIAM.yml):AuctionTableIAM}
+  getAuction:
+    handler: src/handlers/getAuction.handler
+    events:
+      - http:
+          path: /auctions/{id}
+          method: GET
+          cors: true
+          authorizer:
+            arn: ${self:custom.authorizer}
+            type: token
+            identitySource: method.request.header.Authorization
+    environment:
+      AUCTIONS_TABLE_NAME: !Ref AuctionsTable
+      # Reusing http connections by lamda function to reduce TLS handshake latency (keep-alive)
+      AWS_NODEJS_CONNECTION_REUSE_ENABLED: 1
+    iamRoleStatements: ${file(iam/AuctionsTableIAM.yml):AuctionTableIAM}
+  # Bid is property of an Auction
+  placeBid:
+    handler: src/handlers/placeBid.handler
+    events:
+      - http:
+          path: /auctions/{id}/bid
+          # PUT is used to replace an entire resource with a new representation
+          # while PATCH is used to apply partial updates to a resource
+          method: PATCH
+          cors: true
+          authorizer:
+            arn: ${self:custom.authorizer}
+            type: token
+            identitySource: method.request.header.Authorization
+    environment:
+      AUCTIONS_TABLE_NAME: !Ref AuctionsTable
+      # Reusing http connections by lamda function to reduce TLS handshake latency (keep-alive)
+      AWS_NODEJS_CONNECTION_REUSE_ENABLED: 1
+    iamRoleStatements: ${file(iam/AuctionsTableIAM.yml):AuctionTableIAM}
+  # Process Auction with EventBridge to schedule auction for every minute
+  processAuctions:
+    handler: src/handlers/processAuctions.handler
+    # Only uncomment this in PROD, This eventbridge gets involked per minute, AWS will start charging you every minute.
+    # Rather Invoke function using command "sls invoke -f processAuctions -l"
+    # events:
+    #   - schedule: rate(1 minute) 
+    environment:
+      AUCTIONS_TABLE_NAME: !Ref AuctionsTable
+      # Reusing http connections by lamda function to reduce TLS handshake latency (keep-alive)
+      AWS_NODEJS_CONNECTION_REUSE_ENABLED: 1
+    iamRoleStatements: ${file(iam/ProcessAuctions.yml):ProcessAuctions}
+  # Upload product piture to S3 bucket
+  uploadAuctionPicture:
+    handler: src/handlers/uploadAuctionPicture.handler 
+    events:
+      - http:
+          path: /auctions/{id}/picture
+          # PUT is used to replace an entire resource with a new representation
+          # while PATCH is used to apply partial updates to a resource
+          method: PATCH
+          authorizer:
+            arn: ${self:custom.authorizer}
+            type: token
+            identitySource: method.request.header.Authorization
+    environment:
+      AUCTIONS_TABLE_NAME: !Ref AuctionsTable
+      # Reusing http connections by lamda function to reduce TLS handshake latency (keep-alive)
+      AWS_NODEJS_CONNECTION_REUSE_ENABLED: 1
+    iamRoleStatements: ${file(iam/AuctionsBucketIAM.yml):AuctionsBucketIAM}
+      
+resources:
+  Resources:
+    AuctionsTable: ${file(resources/AuctionsTable.yml):AuctionsTable}
+    AuctionsBucket: ${file(resources/AuctionsBucket.yml):AuctionsBucket}
+    AuctionsBucketPolicy: ${file(resources/AuctionsBucketPolicy.yml):AuctionsBucketPolicy}
+
+custom:
+  authorizer: arn:aws:lambda:${aws:region}:${aws:accountId}:function:auth-service-${self:provider.stage}-auth
+  MailQueue:
+    # Since MailQueueArn/MailQueueUrl was exposed as Output in notification-service cloudformation, we can use it here.
+    arn: ${cf:notification-service-${self:provider.stage}.MailQueueArn}
+    url: ${cf:notification-service-${self:provider.stage}.MailQueueUrl}
+  AuctionsBucket:
+    name: auctions-bucket-x2rgi8-${self:provider.stage}
+  bundle:
+    linting: false
