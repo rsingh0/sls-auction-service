@@ -1,0 +1,27 @@
+#https://docs.aws.amazon.com/codebuild/latest/userguide/build-spec-ref.html
+version: 0.2
+
+phases:
+  install:
+    on-failure: ABORT
+    runtime-versions:
+      nodejs: 18
+    commands:
+      - echo Installing serverless CLI
+      - npm i -g serverless
+      - echo Installing npm dependencies of dashboard service
+      - npm install
+  build:
+    on-failure: ABORT
+    commands:
+      - echo Running Tests
+      - npm test
+      - echo Packaging service
+      - serverless package --package auction-artifact --stage dev
+artifacts:
+  files:
+    - auction-artifact/*
+  name: AuctionArtifact
+cache:
+  paths:
+    - "node_modules/**/*"
